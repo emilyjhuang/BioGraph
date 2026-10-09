@@ -1,0 +1,11 @@
+{
+  "name": "biograph",
+  "version": "1.0.0",
+  "description": "Interactive signed network explorer for cancer signaling pathways",
+  "private": true,
+  "scripts": {
+    "test": "node --test tests/*.test.js",
+    "start": "python3 -m http.server 8000"
+  },
+  "license": "MIT"
+}

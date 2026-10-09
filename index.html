@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>BioGraph Signaling Explorer</title>
+  <meta name="description" content="Interactive signed network explorer for human cancer signaling: centrality, perturbation propagation, signed paths and feedback loops." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <svg class="logo" viewBox="0 0 32 32" aria-hidden="true">
+        <circle cx="8" cy="9" r="4" /><circle cx="24" cy="8" r="3" /><circle cx="16" cy="22" r="5" /><circle cx="27" cy="24" r="2.5" />
+        <path d="M8 9 L16 22 M24 8 L16 22 M8 9 L24 8 M16 22 L27 24" />
+      </svg>
+      <div>
+        <h1>BioGraph</h1>
+        <p class="tagline">Signed network explorer for cancer signaling</p>
+      </div>
+    </div>
+    <div class="stats" id="stats" aria-label="Network summary"></div>
+    <div class="top-actions">
+      <button class="btn ghost" id="aboutBtn" type="button">Methods</button>
+      <button class="btn ghost icon" id="themeBtn" type="button" aria-label="Toggle dark mode" title="Toggle theme">
+        <svg viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" /></svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <aside class="panel" aria-label="Controls">
+      <nav class="tabs" role="tablist">
+        <button role="tab" data-tab="explore" aria-selected="true">Explore</button>
+        <button role="tab" data-tab="simulate">Simulate</button>
+        <button role="tab" data-tab="paths">Paths</button>
+        <button role="tab" data-tab="loops">Loops</button>
+        <button role="tab" data-tab="data">Data</button>
+      </nav>
+
+      <!-- EXPLORE -->
+      <section class="tab-body" data-body="explore">
+        <label class="field">
+          <span>Find a protein</span>
+          <input id="search" type="search" list="nodeList" placeholder="e.g. TP53, KRAS, mTORC1…  ( / )" autocomplete="off" />
+          <datalist id="nodeList"></datalist>
+        </label>
+
+        <div class="field">
+          <span>Color nodes by</span>
+          <div class="segmented" id="colorBy">
+            <button data-v="pathway" class="on">Pathway</button>
+            <button data-v="role">Cancer role</button>
+            <button data-v="drug">Druggable</button>
+          </div>
+        </div>
+
+        <label class="field">
+          <span>Size nodes by</span>
+          <select id="sizeBy">
+            <option value="betweenness">Betweenness centrality</option>
+            <option value="pagerank">PageRank</option>
+            <option value="degree">Degree</option>
+            <option value="none">Uniform</option>
+          </select>
+        </label>
+
+        <div class="field">
+          <span>Pathways <small>(click to show / hide)</small></span>
+          <ul class="legend" id="pathwayLegend"></ul>
+        </div>
+
+        <div class="field">
+          <span>Top bottlenecks <small>(betweenness)</small></span>
+          <ol class="ranklist" id="hubList"></ol>
+        </div>
+      </section>
+
+      <!-- SIMULATE -->
+      <section class="tab-body" data-body="simulate" hidden>
+        <p class="hint">Clamp nodes on or off and see how the signal spreads through activating and inhibiting edges, feedback loops included.</p>
+        <div class="field">
+          <span>Guided scenarios</span>
+          <div class="scenarios" id="scenarios"></div>
+        </div>
+        <div class="explain" id="scenarioText" hidden></div>
+
+        <details class="custom" id="customBox">
+          <summary>Custom perturbation</summary>
+          <label class="field">
+            <span>Protein</span>
+            <select id="pertNode"></select>
+          </label>
+          <div class="row">
+            <button class="btn" id="addInhibit" type="button">⊣ Inhibit</button>
+            <button class="btn" id="addActivate" type="button">→ Activate</button>
+          </div>
+          <label class="field">
+            <span>…or apply a drug</span>
+            <select id="drugSelect"></select>
+          </label>
+          <div class="chips" id="pertChips"></div>
+          <div class="row">
+            <button class="btn primary" id="runSim" type="button">Run propagation</button>
+            <button class="btn ghost" id="clearSim" type="button">Clear</button>
+          </div>
+        </details>
+
+        <div id="simResults" hidden>
+          <div class="field">
+            <span>Predicted response <small id="simMeta"></small></span>
+            <div class="divlegend"><span>down</span><i></i><span>up</span></div>
+            <ul class="bars" id="simBars"></ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- PATHS -->
+      <section class="tab-body" data-body="paths" hidden>
+        <p class="hint">How does one protein reach another? The net sign of a path is the product of its edge signs. Tip: shift-click nodes in the graph to set From / To.</p>
+        <label class="field"><span>From</span><select id="pathFrom"></select></label>
+        <label class="field"><span>To</span><select id="pathTo"></select></label>
+        <label class="check"><input type="checkbox" id="pathUndirected" /> Ignore edge direction</label>
+        <button class="btn primary" id="findPath" type="button">Find shortest paths</button>
+        <div id="pathResults"></div>
+      </section>
+
+      <!-- LOOPS -->
+      <section class="tab-body" data-body="loops" hidden>
+        <p class="hint">Directed cycles (up to 8 steps). <b>Negative</b> loops, with an odd number of inhibitions, give homeostasis and pulsing. <b>Positive</b> loops give switches and memory.</p>
+        <div class="segmented" id="loopFilter">
+          <button data-v="all" class="on">All</button>
+          <button data-v="-1">Negative</button>
+          <button data-v="1">Positive</button>
+        </div>
+        <ul class="looplist" id="loopList"></ul>
+      </section>
+
+      <!-- DATA -->
+      <section class="tab-body" data-body="data" hidden>
+        <label class="field">
+          <span>Filter interactions</span>
+          <input id="edgeFilter" type="search" placeholder="gene, mechanism, pathway…" />
+        </label>
+        <div class="row">
+          <button class="btn" id="dlJson" type="button">Download JSON</button>
+          <button class="btn" id="dlCsv" type="button">Download CSV</button>
+        </div>
+        <div class="tablewrap">
+          <table class="edgetable">
+            <thead><tr><th>Source</th><th></th><th>Target</th><th>Mechanism</th></tr></thead>
+            <tbody id="edgeRows"></tbody>
+          </table>
+        </div>
+      </section>
+    </aside>
+
+    <section class="stage" aria-label="Network graph">
+      <svg id="graph" role="img" aria-label="Signed directed protein interaction network"></svg>
+      <div class="tooltip" id="tooltip" hidden></div>
+
+      <div class="edge-legend" aria-label="Edge legend">
+        <span><svg viewBox="0 0 34 10"><line x1="2" y1="5" x2="26" y2="5" /><path d="M24 1 L32 5 L24 9 z" /></svg>activates</span>
+        <span><svg viewBox="0 0 34 10"><line x1="2" y1="5" x2="29" y2="5" /><line x1="30" y1="0" x2="30" y2="10" class="bar" /></svg>inhibits</span>
+        <span><svg viewBox="0 0 34 10"><line x1="2" y1="5" x2="30" y2="5" stroke-dasharray="3 3" /></svg>indirect</span>
+        <span id="nodeLegendExtra"></span>
+      </div>
+
+      <div class="zoom">
+        <button type="button" id="zoomIn" aria-label="Zoom in">+</button>
+        <button type="button" id="zoomOut" aria-label="Zoom out">−</button>
+        <button type="button" id="zoomFit" aria-label="Fit to screen">⤢</button>
+      </div>
+
+      <div class="sim-banner" id="simBanner" hidden>
+        <span id="simBannerText"></span>
+        <button type="button" class="btn ghost small" id="simReplay">Replay</button>
+        <button type="button" class="btn ghost small" id="simExit">Exit simulation</button>
+      </div>
+
+      <aside class="detail" id="detail" hidden aria-live="polite"></aside>
+    </section>
+  </main>
+
+  <dialog id="about">
+    <form method="dialog"><button class="close" aria-label="Close">×</button></form>
+    <h2>Methods</h2>
+    <h3>Network</h3>
+    <p>A hand-curated <b>signed, directed</b> graph of <span data-stat="nodes"></span> human proteins and complexes and
+      <span data-stat="edges"></span> regulatory interactions across seven canonical cancer pathways. It was assembled from KEGG maps
+      (<span id="keggList"></span>) and the review literature. Each edge records direction, sign (activation or inhibition) and
+      mechanism. Edges that stand for several steps (e.g. PI3K → PIP3 → AKT) are marked <i>indirect</i>. CDKN2A appears
+      twice, as p16<sup>INK4a</sup> and p14<sup>ARF</sup>, because its two products act in different pathways. mTOR appears as
+      its two complexes, which respond to drugs differently.</p>
+    <h3>Centrality</h3>
+    <p><b>Betweenness</b> (Brandes' algorithm, directed, normalised) measures how often a node lies on shortest paths between
+      other nodes. High-betweenness nodes act as bottlenecks that carry signal between pathways. <b>PageRank</b> (d = 0.85) ranks nodes
+      by how much upstream regulation flows into them.</p>
+    <h3>Perturbation propagation</h3>
+    <p>Perturbed nodes are clamped to −1 (inhibited) or +1 (activated). Every other node relaxes iteratively towards</p>
+    <p class="eq">x<sub>v</sub> ← (1−λ)·x<sub>v</sub> + λ · δ · tanh( γ · Σ<sub>u→v</sub> s<sub>uv</sub> x<sub>u</sub> / √k<sub>v</sub><sup>in</sup> )</p>
+    <p>where s<sub>uv</sub> = ±1 is the edge sign, γ = 1.2 is the gain, δ = 0.85 is the per-hop attenuation and λ = 0.5 is the damping. Because the
+      update is bounded and damped, it reaches a steady state even with feedback loops in the network. Values are changes
+      relative to the unperturbed baseline. The model is <b>qualitative</b>: it predicts the direction and relative size of a change,
+      not concentrations or timing. The guided scenarios are unit-tested against the behaviour reported in the literature.</p>
+    <h3>Paths &amp; loops</h3>
+    <p>Breadth-first search lists every shortest path between two proteins. A path's net sign is the product of its edge
+      signs, so two inhibitions in a row act as activation. Feedback loops are elementary directed cycles of up to 8 steps, found
+      by depth-first search and rooted at their lowest-index node so each cycle is counted once.</p>
+    <h3>Limitations</h3>
+    <p>The network leaves out many proteins, isoforms, cell-type context, dosage and timing. Treat predictions as hypotheses to test.</p>
+  </dialog>
+
+  <script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
+  <script src="js/data.js"></script>
+  <script src="js/analysis.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
